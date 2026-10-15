@@ -3,26 +3,25 @@ import Link from 'next/link'
 import { AuthForm } from '@/components/auth/auth-form'
 import { AuthLayout } from '@/components/auth/auth-layout'
 
-export const metadata: Metadata = { title: 'Merchant login', robots: { index: false } }
+export const metadata: Metadata = { title: 'Create account' }
 
-export default function MerchantLoginPage() {
+export default function RegisterPage() {
   return (
     <AuthLayout
-      tone="staff"
-      eyebrow="Zuppio for Restaurants"
-      title="Merchant login"
-      description="Manage your menu, opening hours and incoming orders."
-      image="/images/dishes/tandoori.png"
+      eyebrow="Customer"
+      title="Create your account"
+      description="Order from restaurants within 5 km of you, anywhere in India."
+      image="/images/dishes/biryani.png"
       footer={
         <>
-          Merchant accounts are approved by Zuppio. Not a merchant?{' '}
+          Already have an account?{' '}
           <Link href="/login" className="font-semibold text-primary hover:underline">
-            Customer sign in
+            Sign in
           </Link>
         </>
       }
     >
-      <AuthForm mode="signin" role="merchant" />
+      <AuthForm mode="register" />
     </AuthLayout>
   )
 }
