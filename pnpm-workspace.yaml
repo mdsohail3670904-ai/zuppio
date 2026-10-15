@@ -1,6 +1,6 @@
-onlyBuiltDependencies:
-  - '@firebase/util'
-  - esbuild
-  - sharp
-  - unrs-resolver
-  - protobufjs
+allowBuilds:
+  '@firebase/util': true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  protobufjs: true
