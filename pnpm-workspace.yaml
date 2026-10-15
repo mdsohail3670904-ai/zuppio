@@ -1,9 +1,7 @@
-pmOnFail: ignore
-
-minimumReleaseAgeExclude:
-  - '@next/*'
-  - next
 
 allowBuilds:
-  '@firebase/util': set this to true or false
-  protobufjs: set this to true or false
+  '@firebase/util': true
+  protobufjs: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
