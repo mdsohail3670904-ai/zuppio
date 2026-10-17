@@ -31,9 +31,8 @@ export default async function MenuItemPage({ params }: Props) {
   if (!item) notFound()
 
   const restaurant = await getRestaurantById(item.restaurantId)
-  const closed = !restaurant?.isOpen
-
-  const checkoutUrl = `/checkout?item=${encodeURIComponent(item.id)}`
+  const restaurantName = restaurant?.name ?? 'Restaurant'
+  const restaurantClosed = !restaurant?.isOpen
 
   return (
     <SiteShell>
@@ -90,21 +89,25 @@ export default async function MenuItemPage({ params }: Props) {
               </p>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 pt-2">
               <AddToCartButton
                 item={item}
-                restaurantName={restaurant?.name ?? 'Restaurant'}
-                disabled={closed}
+                restaurantName={restaurantName}
+                disabled={restaurantClosed}
                 className="h-11 w-full"
               />
 
               <Link
-                href={checkoutUrl}
-                aria-disabled={closed}
-                tabIndex={closed ? -1 : undefined}
-                onClick={closed ? (event) => event.preventDefault() : undefined}
-                className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground transition-opacity ${
-                  closed
+                href={`/checkout?item=${encodeURIComponent(item.id)}`}
+                aria-disabled={restaurantClosed}
+                tabIndex={restaurantClosed ? -1 : undefined}
+                onClick={
+                  restaurantClosed
+                    ? (event) => event.preventDefault()
+                    : undefined
+                }
+                className={`inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-bold text-primary-foreground transition-opacity ${
+                  restaurantClosed
                     ? 'cursor-not-allowed opacity-50'
                     : 'hover:opacity-90'
                 }`}
