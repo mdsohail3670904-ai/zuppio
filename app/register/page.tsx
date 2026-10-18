@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AuthForm } from '@/components/auth/auth-form'
@@ -15,13 +16,16 @@ export default function RegisterPage() {
       footer={
         <>
           Already have an account?{' '}
-          <Link href="/login" className="font-semibold text-primary hover:underline">
+          <Link
+            href="/login"
+            className="font-semibold text-primary hover:underline"
+          >
             Sign in
           </Link>
         </>
       }
     >
-      <AuthForm mode="register" />
+      <AuthForm variant="customer-register" firebaseReady={true} />
     </AuthLayout>
   )
 }
