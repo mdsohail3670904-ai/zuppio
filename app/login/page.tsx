@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { AuthForm } from '@/components/auth/auth-form'
@@ -15,13 +16,16 @@ export default function LoginPage() {
       footer={
         <>
           New to Zuppio?{' '}
-          <Link href="/register" className="font-semibold text-primary hover:underline">
+          <Link
+            href="/register"
+            className="font-semibold text-primary hover:underline"
+          >
             Create an account
           </Link>
         </>
       }
     >
-      <AuthForm mode="signin" role="customer" />
+      <AuthForm variant="customer-login" firebaseReady={true} />
     </AuthLayout>
   )
 }
