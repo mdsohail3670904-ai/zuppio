@@ -1,15 +1,17 @@
-
 'use client'
 
 import { useActionState, useId, useState } from 'react'
+import { signOut } from 'firebase/auth'
 import { AlertCircle, Eye, EyeOff, Info, Loader2 } from 'lucide-react'
 import {
   adminLoginAction,
-  customerLoginAction,
   merchantLoginAction,
-  registerCustomerAction,
+  completeCustomerPhoneAuth,
+  createCustomerPhoneSession,
   type AuthFormState,
 } from '@/app/actions/auth'
+import { phoneAuth } from '@/lib/firebase/client'
+import { sendPhoneOtp } from '@/lib/firebase/phone-otp'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -30,16 +32,6 @@ type AuthAction = (
   formData: FormData,
 ) => Promise<AuthFormState>
 
-const mobileField: Field = {
-  name: 'mobile',
-  label: 'Mobile number',
-  type: 'tel',
-  autoComplete: 'tel-national',
-  inputMode: 'tel',
-  placeholder: '98765 43210',
-  prefix: '+91',
-}
-
 const currentPassword: Field = {
   name: 'password',
   label: 'Password',
@@ -48,39 +40,6 @@ const currentPassword: Field = {
 }
 
 const variants = {
-  'customer-register': {
-    action: registerCustomerAction,
-    submit: 'Create account',
-    fields: [
-      {
-        name: 'name',
-        label: 'Full name',
-        type: 'text',
-        autoComplete: 'name',
-        placeholder: 'Priya Sharma',
-        autoCapitalize: 'words',
-      },
-      mobileField,
-      {
-        name: 'password',
-        label: 'Password',
-        type: 'password',
-        autoComplete: 'new-password',
-        hint: 'At least 8 characters, with a letter and a number.',
-      },
-      {
-        name: 'confirmPassword',
-        label: 'Confirm password',
-        type: 'password',
-        autoComplete: 'new-password',
-      },
-    ],
-  },
-  'customer-login': {
-    action: customerLoginAction,
-    submit: 'Log in',
-    fields: [mobileField, currentPassword],
-  },
   merchant: {
     action: merchantLoginAction,
     submit: 'Log in as merchant',
@@ -118,19 +77,296 @@ const variants = {
   { action: AuthAction; submit: string; fields: Field[] }
 >
 
-export type AuthVariant = keyof typeof variants
+type AuthVariant = 'customer-login' | 'customer-register' | 'merchant' | 'admin'
 
-const initialState: AuthFormState = { status: 'idle' }
+type AuthFormProps = {
+  variant?: AuthVariant
+  firebaseReady?: boolean
+  mode?: 'signin'
+  role?: 'merchant' | 'admin'
+}
 
 export function AuthForm({
   variant,
+  role,
+  firebaseReady = true,
+}: AuthFormProps) {
+  const resolvedVariant = variant ?? role ?? 'customer-login'
+
+  if (
+    resolvedVariant === 'customer-login' ||
+    resolvedVariant === 'customer-register'
+  ) {
+    return (
+      <CustomerPhoneForm
+        mode={resolvedVariant === 'customer-register' ? 'register' : 'login'}
+        firebaseReady={firebaseReady}
+      />
+    )
+  }
+
+  return (
+    <StaffPasswordForm
+      variant={resolvedVariant}
+      firebaseReady={firebaseReady}
+    />
+  )
+}
+
+function CustomerPhoneForm({
+  mode,
   firebaseReady,
 }: {
-  variant: AuthVariant
+  mode: 'login' | 'register'
   firebaseReady: boolean
 }) {
-  // Prevent a build-time crash if a page passes an invalid variant.
-  const config = variants[variant] ?? variants['customer-login']
+  const [name, setName] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [otp, setOtp] = useState('')
+  const [stage, setStage] = useState<'phone' | 'otp'>('phone')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [confirmation, setConfirmation] =
+    useState<Awaited<ReturnType<typeof sendPhoneOtp>> | null>(null)
+
+  const baseId = useId()
+
+  async function handleSendOtp() {
+    setMessage('')
+
+    const digits = mobile.replace(/\D/g, '').slice(-10)
+
+    if (mode === 'register' && name.trim().length < 2) {
+      setMessage('Please enter your full name.')
+      return
+    }
+
+    if (!/^[6-9]\d{9}$/.test(digits)) {
+      setMessage('Enter a valid 10-digit Indian mobile number.')
+      return
+    }
+
+    if (!firebaseReady) {
+      setMessage('Firebase setup is incomplete.')
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      const result = await sendPhoneOtp(`+91${digits}`)
+      setConfirmation(result)
+      setMobile(digits)
+      setStage('otp')
+      setMessage('OTP sent. Please check your mobile.')
+    } catch (error) {
+      const code = (error as { code?: string }).code
+
+      setMessage(
+        code === 'auth/too-many-requests'
+          ? 'Too many attempts. Please try again later.'
+          : code === 'auth/invalid-phone-number'
+            ? 'The mobile number is invalid.'
+            : 'Could not send OTP. Check Firebase Phone Authentication settings and try again.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleVerifyOtp() {
+    setMessage('')
+
+    if (!confirmation) {
+      setMessage('Please request an OTP first.')
+      return
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      setMessage('Enter the 6-digit OTP.')
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      const credential = await confirmation.confirm(otp)
+      const idToken = await credential.user.getIdToken()
+
+      const result = await completeCustomerPhoneAuth(
+        idToken,
+        name,
+        mode,
+      )
+
+      if (!result.ok) {
+        await signOut(phoneAuth).catch(() => {})
+        setMessage(result.message ?? 'Verification failed.')
+        setStage('phone')
+        setOtp('')
+        return
+      }
+
+      const refreshedToken = await credential.user.getIdToken(true)
+
+      await createCustomerPhoneSession(refreshedToken)
+    } catch (error) {
+      const code = (error as { code?: string }).code
+
+      setMessage(
+        code === 'auth/invalid-verification-code'
+          ? 'Incorrect OTP. Please check the code and try again.'
+          : code === 'auth/code-expired'
+            ? 'OTP expired. Please request a new one.'
+            : 'Could not complete verification. Please try again.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {!firebaseReady && (
+        <p className="rounded-xl bg-secondary p-3 text-sm">
+          Firebase setup is required before customer OTP login can work.
+        </p>
+      )}
+
+      {mode === 'register' && (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`${baseId}-name`}
+            className="text-sm font-semibold"
+          >
+            Full name
+          </label>
+          <input
+            id={`${baseId}-name`}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            disabled={stage === 'otp' || busy}
+            autoComplete="name"
+            placeholder="Enter your full name"
+            maxLength={80}
+            className="h-12 rounded-xl border border-input bg-card px-3 outline-none focus:ring-2 focus:ring-ring/40"
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor={`${baseId}-mobile`}
+          className="text-sm font-semibold"
+        >
+          Mobile number
+        </label>
+
+        <div className="flex h-12 items-center rounded-xl border border-input bg-card focus-within:ring-2 focus-within:ring-ring/40">
+          <span className="border-r px-3 text-sm font-medium text-muted-foreground">
+            +91
+          </span>
+          <input
+            id={`${baseId}-mobile`}
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            placeholder="98765 43210"
+            value={mobile}
+            onChange={(event) =>
+              setMobile(
+                event.target.value.replace(/\D/g, '').slice(-10),
+              )
+            }
+            disabled={stage === 'otp' || busy}
+            className="h-full w-full rounded-xl bg-transparent px-3 outline-none"
+          />
+        </div>
+      </div>
+
+      {stage === 'otp' && (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor={`${baseId}-otp`}
+            className="text-sm font-semibold"
+          >
+            6-digit OTP
+          </label>
+          <input
+            id={`${baseId}-otp`}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="Enter OTP"
+            maxLength={6}
+            value={otp}
+            onChange={(event) =>
+              setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))
+            }
+            className="h-12 rounded-xl border border-input bg-card px-3 tracking-widest outline-none focus:ring-2 focus:ring-ring/40"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setStage('phone')
+              setOtp('')
+              setConfirmation(null)
+              setMessage('')
+            }}
+            disabled={busy}
+            className="self-start text-sm font-semibold text-primary hover:underline"
+          >
+            Change mobile number
+          </button>
+        </div>
+      )}
+
+      {message && (
+        <p
+          role="status"
+          className="flex gap-2 rounded-xl bg-secondary p-3 text-sm leading-relaxed"
+        >
+          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{message}</span>
+        </p>
+      )}
+
+      {stage === 'phone' ? (
+        <button
+          type="button"
+          onClick={handleSendOtp}
+          disabled={busy || !firebaseReady}
+          className={cn(buttonVariants(), 'h-12 text-base font-bold')}
+        >
+          {busy && <Loader2 className="size-4 animate-spin" />}
+          {busy ? 'Sending OTP…' : 'Send OTP'}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={handleVerifyOtp}
+          disabled={busy}
+          className={cn(buttonVariants(), 'h-12 text-base font-bold')}
+        >
+          {busy && <Loader2 className="size-4 animate-spin" />}
+          {busy ? 'Verifying…' : 'Verify OTP and continue'}
+        </button>
+      )}
+
+      <div id="phone-recaptcha" />
+    </div>
+  )
+}
+
+function StaffPasswordForm({
+  variant,
+  firebaseReady,
+}: {
+  variant: 'merchant' | 'admin'
+  firebaseReady: boolean
+}) {
+  const config = variants[variant]
+  const initialState: AuthFormState = { status: 'idle' }
 
   const [state, formAction, pending] = useActionState(
     config.action,
@@ -142,13 +378,9 @@ export function AuthForm({
   return (
     <form action={formAction} className="flex flex-col gap-4" noValidate>
       {!firebaseReady && (
-        <p className="flex gap-2 rounded-xl bg-secondary p-3 text-sm leading-relaxed text-secondary-foreground">
-          <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            <strong className="font-semibold">Setup required:</strong>{' '}
-            Firebase credentials are not added yet, so this form validates
-            input but cannot sign anyone in.
-          </span>
+        <p className="flex gap-2 rounded-xl bg-secondary p-3 text-sm">
+          <Info className="size-4 shrink-0" aria-hidden="true" />
+          Firebase credentials are not configured.
         </p>
       )}
 
@@ -211,10 +443,6 @@ function FormField({
 }) {
   const [revealed, setRevealed] = useState(false)
   const isPassword = field.type === 'password'
-  const describedBy =
-    [error && `${id}-error`, field.hint && `${id}-hint`]
-      .filter(Boolean)
-      .join(' ') || undefined
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -230,12 +458,6 @@ function FormField({
             : 'border-input focus-within:border-ring focus-within:ring-ring/40',
         )}
       >
-        {field.prefix && (
-          <span className="border-r px-3 text-sm font-medium text-muted-foreground">
-            {field.prefix}
-          </span>
-        )}
-
         <input
           key={defaultValue}
           id={id}
@@ -247,7 +469,6 @@ function FormField({
           placeholder={field.placeholder}
           defaultValue={isPassword ? undefined : defaultValue}
           aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy}
           required
           className="h-full w-full min-w-0 rounded-xl bg-transparent px-3 text-base outline-none placeholder:text-muted-foreground"
         />
@@ -257,12 +478,7 @@ function FormField({
             type="button"
             onClick={() => setRevealed((value) => !value)}
             className="mr-1 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
-            aria-label={
-              revealed
-                ? `Hide ${field.label.toLowerCase()}`
-                : `Show ${field.label.toLowerCase()}`
-            }
-            aria-pressed={revealed}
+            aria-label={revealed ? 'Hide password' : 'Show password'}
           >
             {revealed ? (
               <EyeOff className="size-4" aria-hidden="true" />
@@ -273,16 +489,12 @@ function FormField({
         )}
       </div>
 
-      {field.hint && !error && (
-        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
-          {field.hint}
-        </p>
+      {field.hint && (
+        <p className="text-xs text-muted-foreground">{field.hint}</p>
       )}
 
       {error && (
-        <p id={`${id}-error`} className="text-xs font-medium text-destructive">
-          {error}
-        </p>
+        <p className="text-xs font-medium text-destructive">{error}</p>
       )}
     </div>
   )
