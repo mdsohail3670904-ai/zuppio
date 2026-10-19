@@ -165,3 +165,77 @@ export async function logoutAction(formData: FormData) {
   await clearSession()
   redirect(to.startsWith('/') && !to.startsWith('//') ? to : '/')
 }
+export async function completeCustomerPhoneAuth(
+  idToken: string,
+  name: string,
+  mode: 'login' | 'register',
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    if (!isFirebaseConfigured()) {
+      return { ok: false, message: 'Firebase is not configured.' }
+    }
+
+    if (!idToken || idToken.length > 10000) {
+      return { ok: false, message: 'Invalid authentication token.' }
+    }
+
+    const decoded = await adminAuth().verifyIdToken(idToken, true)
+
+    if (!decoded.phone_number || !decoded.uid) {
+      return { ok: false, message: 'Please verify your mobile number.' }
+    }
+
+    const userRef = adminDb().collection('customers').doc(decoded.uid)
+    const existing = await userRef.get()
+
+    if (mode === 'login' && !existing.exists) {
+      return { ok: false, message: 'Account not found. Please register first.' }
+    }
+
+    if (mode === 'register' && existing.exists) {
+      return { ok: false, message: 'Account already exists. Please log in.' }
+    }
+
+    if (mode === 'register') {
+      if (!name || name.trim().length < 2) {
+        return { ok: false, message: 'Enter your full name.' }
+      }
+
+      await userRef.set({
+        name: name.trim().slice(0, 80),
+        mobile: decoded.phone_number,
+        status: 'active',
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    }
+
+    await adminAuth().setCustomUserClaims(decoded.uid, { role: 'customer' })
+    return { ok: true }
+  } catch {
+    return { ok: false, message: 'Verification failed. Please try again.' }
+  }
+}
+
+export async function createCustomerPhoneSession(idToken: string) {
+  if (!isFirebaseConfigured()) {
+    throw new Error('Firebase is not configured.')
+  }
+
+  const decoded = await adminAuth().verifyIdToken(idToken, true)
+
+  if (!decoded.phone_number || decoded.role !== 'customer') {
+    throw new Error('Customer phone verification required.')
+  }
+
+  const user = await adminDb()
+    .collection('customers')
+    .doc(decoded.uid)
+    .get()
+
+  if (!user.exists || user.data()?.status !== 'active') {
+    throw new Error('Customer account not found or inactive.')
+  }
+
+  await createSession(idToken)
+  redirect(HOME_PATH.customer)
+}
