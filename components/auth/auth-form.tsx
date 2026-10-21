@@ -160,7 +160,13 @@ function CustomerPhoneForm({
       setStage('otp')
       setMessage('OTP sent. Please check your mobile.')
     } catch (error) {
-      const code = (error as { code?: string }).code
+  console.error('Firebase OTP error:', error)
+  const code = (error as { code?: string }).code
+  setMessage(
+    `OTP error: ${code ?? 'unknown'} — ${
+      error instanceof Error ? error.message : 'Please try again.'
+    }`
+  )
 
       setMessage(
         code === 'auth/too-many-requests'
@@ -211,7 +217,13 @@ function CustomerPhoneForm({
 
       await createCustomerPhoneSession(refreshedToken)
     } catch (error) {
-      const code = (error as { code?: string }).code
+  console.error('Firebase OTP error:', error)
+  const code = (error as { code?: string }).code
+  setMessage(
+    `OTP error: ${code ?? 'unknown'} — ${
+      error instanceof Error ? error.message : 'Please try again.'
+    }`
+  )
 
       setMessage(
         code === 'auth/invalid-verification-code'
