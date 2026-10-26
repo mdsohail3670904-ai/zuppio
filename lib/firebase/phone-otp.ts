@@ -1,3 +1,4 @@
+
 'use client'
 
 export async function sendPhoneOtp(
@@ -7,9 +8,7 @@ export async function sendPhoneOtp(
 
   const response = await fetch('/api/auth/send-otp', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mobile }),
   })
 
@@ -23,20 +22,20 @@ export async function sendPhoneOtp(
 export async function verifyPhoneOtp(
   mobile: string,
   code: string,
-): Promise<boolean> {
+  mode: 'login' | 'register',
+  name?: string,
+): Promise<string> {
   const response = await fetch('/api/auth/verify-otp', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ mobile, code }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mobile, code, mode, name }),
   })
 
   const result = await response.json()
 
-  if (!response.ok || !result.verified) {
+  if (!response.ok || !result.success || !result.customToken) {
     throw new Error(result.error ?? 'OTP verification failed.')
   }
 
-  return true
+  return result.customToken
 }
