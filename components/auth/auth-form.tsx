@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useId, useState } from 'react'
-import { signOut } from 'firebase/auth'
+import { signInWithCustomToken, signOut } from 'firebase/auth'
 import { AlertCircle, Eye, EyeOff, Info, Loader2 } from 'lucide-react'
 import {
   adminLoginAction,
