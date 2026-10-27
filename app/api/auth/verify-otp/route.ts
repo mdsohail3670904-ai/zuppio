@@ -96,6 +96,7 @@ export async function POST(request: Request) {
         phone: mobile,
         phoneNumber: phone,
         role: 'customer',
+        status: 'active',
         createdAt: new Date().toISOString(),
       })
     } else {
