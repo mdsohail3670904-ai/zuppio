@@ -180,50 +180,48 @@ function CustomerPhoneForm({
     }
   }
 
-  async function handleVerifyOtp() {
-    setMessage('')
+async function handleVerifyOtp() {
+  setMessage('')
 
-    if (!confirmation) {
-      setMessage('Please request an OTP first.')
-      return
-    }
+  if (!/^\d{6}$/.test(otp)) {
+    setMessage('Enter the 6-digit OTP.')
+    return
+  }
 
-    if (!/^\d{6}$/.test(otp)) {
-      setMessage('Enter the 6-digit OTP.')
-      return
-    }
+  setBusy(true)
 
-    setBusy(true)
+  try {
+    const mobile = phone.replace(/\D/g, '').slice(-10)
 
-    try {
-      const credential = await confirmation.confirm(otp)
-      const idToken = await credential.user.getIdToken()
+    const customToken = await verifyPhoneOtp(
+      mobile,
+      otp,
+      mode,
+      name,
+    )
 
-      const result = await completeCustomerPhoneAuth(
-        idToken,
-        name,
-        mode,
-      )
+    const credential = await signInWithCustomToken(
+      phoneAuth,
+      customToken,
+    )
 
-      if (!result.ok) {
-        await signOut(phoneAuth).catch(() => {})
-        setMessage(result.message ?? 'Verification failed.')
-        setStage('phone')
-        setOtp('')
-        return
-      }
+    const refreshedToken = await credential.user.getIdToken(true)
 
-      const refreshedToken = await credential.user.getIdToken(true)
+    await createCustomerPhoneSession(refreshedToken)
+  } catch (error) {
+    console.error('MiniMoth OTP error:', error)
 
-      await createCustomerPhoneSession(refreshedToken)
-    } catch (error) {
-  console.error('Firebase OTP error:', error)
-  const code = (error as { code?: string }).code
-  setMessage(
-    `OTP error: ${code ?? 'unknown'} — ${
-      error instanceof Error ? error.message : 'Please try again.'
-    }`
-  )
+    setMessage(
+      error instanceof Error
+        ? error.message
+        : 'OTP verification failed. Please try again.',
+    )
+    setOtp('')
+  } finally {
+    setBusy(false)
+  }
+}
+
 
       setMessage(
         code === 'auth/invalid-verification-code'
