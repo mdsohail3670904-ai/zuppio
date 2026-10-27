@@ -367,6 +367,7 @@ export async function completeCustomerPhoneAuth(
 }
 
 /* Create the secure server session after refreshing the Firebase token */
+
 export async function createCustomerPhoneSession(idToken: string) {
   if (!isFirebaseConfigured()) {
     throw new Error('Firebase is not configured.')
@@ -376,14 +377,17 @@ export async function createCustomerPhoneSession(idToken: string) {
     throw new Error('Invalid authentication token.')
   }
 
-  const decoded = await adminAuth().verifyIdToken(idToken, true)
+  const auth = adminAuth()
+  const decoded = await auth.verifyIdToken(idToken, true)
 
-  if (
-    !decoded.phone_number ||
-    decoded.firebase?.sign_in_provider !== 'phone' ||
-    decoded.role !== 'customer'
-  ) {
-    throw new Error('Customer phone verification required.')
+  if (decoded.role !== 'customer') {
+    throw new Error('Customer authentication required.')
+  }
+
+  const user = await auth.getUser(decoded.uid)
+
+  if (!user.phoneNumber) {
+    throw new Error('Customer phone number not found.')
   }
 
   const customer = await adminDb()
@@ -391,13 +395,18 @@ export async function createCustomerPhoneSession(idToken: string) {
     .doc(decoded.uid)
     .get()
 
-  if (!customer.exists || customer.data()?.status !== 'active') {
+  if (
+    !customer.exists ||
+    customer.data()?.role !== 'customer' ||
+    customer.data()?.status !== 'active'
+  ) {
     throw new Error('Customer account not found or inactive.')
   }
 
   await createSession(idToken)
   redirect(HOME_PATH.customer)
 }
+
 
 /* Logout */
 export async function logoutAction(formData: FormData) {
