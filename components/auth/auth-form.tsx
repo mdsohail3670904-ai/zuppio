@@ -126,8 +126,7 @@ function CustomerPhoneForm({
   const [stage, setStage] = useState<'phone' | 'otp'>('phone')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [confirmation, setConfirmation] =
-    useState<Awaited<ReturnType<typeof sendPhoneOtp>> | null>(null)
+  
 
   const baseId = useId()
 
@@ -155,7 +154,7 @@ function CustomerPhoneForm({
 
     try {
       const result = await sendPhoneOtp(`+91${digits}`)
-      setConfirmation(result)
+      
       setMobile(digits)
       setStage('otp')
       setMessage('OTP sent. Please check your mobile.')
@@ -320,7 +319,7 @@ async function handleVerifyOtp() {
             onClick={() => {
               setStage('phone')
               setOtp('')
-              setConfirmation(null)
+              
               setMessage('')
             }}
             disabled={busy}
@@ -363,7 +362,7 @@ async function handleVerifyOtp() {
         </button>
       )}
 
-      <div id="phone-recaptcha" />
+      
     </div>
   )
 }
