@@ -179,6 +179,7 @@ function CustomerPhoneForm({
     }
   }
 
+
 async function handleVerifyOtp() {
   setMessage('')
 
@@ -190,10 +191,10 @@ async function handleVerifyOtp() {
   setBusy(true)
 
   try {
-    const mobile = phone.replace(/\D/g, '').slice(-10)
+    const digits = mobile.replace(/\D/g, '').slice(-10)
 
     const customToken = await verifyPhoneOtp(
-      mobile,
+      digits,
       otp,
       mode,
       name,
@@ -221,18 +222,6 @@ async function handleVerifyOtp() {
   }
 }
 
-
-      setMessage(
-        code === 'auth/invalid-verification-code'
-          ? 'Incorrect OTP. Please check the code and try again.'
-          : code === 'auth/code-expired'
-            ? 'OTP expired. Please request a new one.'
-            : 'Could not complete verification. Please try again.',
-      )
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <div className="flex flex-col gap-4">
