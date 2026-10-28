@@ -191,6 +191,7 @@ async function handleVerifyOtp() {
   setBusy(true)
 
   try {
+    console.log('OTP length:', otp.length, 'OTP:', JSON.stringify(otp))
     const digits = mobile.replace(/\D/g, '').slice(-10)
 
     const customToken = await verifyPhoneOtp(
