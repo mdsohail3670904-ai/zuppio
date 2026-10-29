@@ -1,9 +1,7 @@
 
 'use client'
 
-export async function sendPhoneOtp(
-  phoneNumber: string,
-): Promise<void> {
+export async function sendPhoneOtp(phoneNumber: string): Promise<void> {
   const mobile = phoneNumber.replace(/\D/g, '').slice(-10)
 
   const response = await fetch('/api/auth/send-otp', {
@@ -31,10 +29,26 @@ export async function verifyPhoneOtp(
     body: JSON.stringify({ mobile, code, mode, name }),
   })
 
-  const result = await response.json()
+  const raw = await response.text()
+
+  let result: {
+    success?: boolean
+    customToken?: string
+    error?: string
+  }
+
+  try {
+    result = JSON.parse(raw)
+  } catch {
+    throw new Error(
+      `Server returned an empty or invalid response (HTTP ${response.status}). Check Vercel logs.`,
+    )
+  }
 
   if (!response.ok || !result.success || !result.customToken) {
-    throw new Error(result.error ?? 'OTP verification failed.')
+    throw new Error(
+      result.error ?? `Verification failed (HTTP ${response.status}).`,
+    )
   }
 
   return result.customToken
