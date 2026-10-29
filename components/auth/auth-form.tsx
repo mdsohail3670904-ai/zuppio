@@ -11,7 +11,10 @@ import {
   type AuthFormState,
 } from '@/app/actions/auth'
 import { phoneAuth } from '@/lib/firebase/client'
-import { sendPhoneOtp } from '@/lib/firebase/phone-otp'
+import {
+  sendPhoneOtp,
+  verifyPhoneOtp,
+} from '@/lib/firebase/phone-otp'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
