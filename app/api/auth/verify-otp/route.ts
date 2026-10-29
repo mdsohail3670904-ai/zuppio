@@ -55,12 +55,21 @@ export async function POST(request: Request) {
       }
     )
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: 'OTP is incorrect or expired. Please try again.' },
-        { status: 400 }
-      )
-    }
+ const result = await response.json().catch(() => ({}))
+
+if (!response.ok) {
+  console.error('MiniMoth verify failed:', {
+    status: response.status,
+    code: result.code,
+    error: result.error,
+    request_id: result.request_id,
+  })
+
+  return NextResponse.json(
+    { error: result.error ?? 'OTP verification failed.' },
+    { status: response.status }
+  )
+}
 
     const auth = adminAuth()
     const db = adminDb()
